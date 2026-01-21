@@ -1,6 +1,6 @@
 // src/components/MainPage.tsx
-import React, { useContext, useEffect, useState } from 'react'
-import { createFile, deleteFile, downloadFile, listFiles, uploadFile } from '../services/googleApi'
+import React, { useContext, useEffect, useRef, useState } from 'react'
+import { deleteFile, downloadFile, listFiles, uploadFile } from '../services/googleApi'
 import { AuthContext } from '../context/AuthContext.ts'
 
 const MainPage: React.FC = () => {
@@ -8,7 +8,8 @@ const MainPage: React.FC = () => {
 	const [files, setFiles] = useState<gapi.client.drive.File[]>([])
 	const [loading, setLoading] = useState<boolean>(false)
 	const [error, setError] = useState<string | null>(null)
-	const [selectedFile, setSelectedFile] = useState<File | null>(null)
+	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+	const fileInputRef = useRef<HTMLInputElement | null>(null)
 
 	useEffect(() => {
 		if (isSignedIn) {
@@ -31,19 +32,6 @@ const MainPage: React.FC = () => {
 			setError('Failed to fetch files. Please try again.')
 		} finally {
 			setLoading(false)
-		}
-	}
-
-	const handleCreateFile = async () => {
-		// Creates a new sample file in Google Drive.
-		setError(null)
-		try {
-			const response = await createFile(`Sample_${new Date().toISOString()}.txt`, 'Hello, Google Drive!')
-			console.log('File Created:', response)
-			fetchFiles()
-		} catch (error) {
-			console.error('Error Creating File:', error)
-			setError('Failed to create file. Please try again.')
 		}
 	}
 
@@ -75,21 +63,24 @@ const MainPage: React.FC = () => {
 	}
 
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-		// Updates the selected file from the file input.
-		const nextFile = event.target.files?.[0] ?? null
-		setSelectedFile(nextFile)
+		// Updates the selected files from the file input.
+		const nextFiles = event.target.files ? Array.from(event.target.files) : []
+		setSelectedFiles(nextFiles)
 	}
 
 	const handleUploadFile = async () => {
-		// Uploads the selected file to Google Drive.
-		if (!selectedFile) {
-			setError('Please select a file to upload.')
+		// Uploads the selected files to Google Drive.
+		if (selectedFiles.length === 0) {
+			setError('Please select one or more files to upload.')
 			return
 		}
 		setError(null)
 		try {
-			await uploadFile(selectedFile)
-			setSelectedFile(null)
+			await Promise.all(selectedFiles.map(file => uploadFile(file)))
+			setSelectedFiles([])
+			if (fileInputRef.current) {
+				fileInputRef.current.value = ''
+			}
 			fetchFiles()
 		} catch (error) {
 			console.error('Error uploading file:', error)
@@ -101,16 +92,24 @@ const MainPage: React.FC = () => {
 		<section>
 			{isSignedIn ? (
 				<section>
+					<button type="button" className="btn btn-lg bg-danger" onClick={signOut}>
+						Sign Out
+					</button>
+					<br></br>
+					<br></br>
 					<div className="mb-4">
-						<button type="button" className="btn btn-lg bg-success me-3" onClick={handleCreateFile}>
+						{/* <button type="button" className="btn btn-lg bg-success me-3" onClick={handleCreateFile}>
 							Create File
-						</button>
-						<input type="file" className="form-control d-inline-block w-auto me-2" onChange={handleFileChange} />
-						<button type="button" className="btn btn-lg bg-primary me-3" onClick={handleUploadFile} disabled={!selectedFile}>
-							Upload File
-						</button>
-						<button type="button" className="btn btn-lg bg-danger" onClick={signOut}>
-							Sign Out
+						</button> */}
+						<input
+							ref={fileInputRef}
+							type="file"
+							multiple
+							className="form-control d-inline-block w-auto me-2"
+							onChange={handleFileChange}
+						/>
+						<button type="button" className="btn btn-lg bg-primary me-3" onClick={handleUploadFile} disabled={selectedFiles.length === 0}>
+							Submit
 						</button>
 					</div>
 					{error && (
@@ -138,7 +137,7 @@ const MainPage: React.FC = () => {
 									const isGoogleAppsFile = fileType.startsWith('application/vnd.google-apps')
 
 									return (
-										<li key={fileId}>
+										<li key={fileId} className="mb-2">
 											<span>
 												{fileName} ({fileType})
 											</span>
