@@ -1,6 +1,6 @@
 // src/components/MainPage.tsx
 import React, { useContext, useEffect, useState } from 'react'
-import { createFile, downloadFile, listFiles, uploadFile } from '../services/googleApi'
+import { createFile, deleteFile, downloadFile, listFiles, uploadFile } from '../services/googleApi'
 import { AuthContext } from '../context/AuthContext.ts'
 
 const MainPage: React.FC = () => {
@@ -55,6 +55,22 @@ const MainPage: React.FC = () => {
 		} catch (error) {
 			console.error('Error downloading file:', error)
 			setError('Failed to download file. Please try again.')
+		}
+	}
+
+	const handleDeleteFile = async (fileId: string, fileName: string) => {
+		// Deletes a file from Google Drive after confirmation.
+		const shouldDelete = window.confirm(`Delete "${fileName}" from Google Drive?`)
+		if (!shouldDelete) {
+			return
+		}
+		setError(null)
+		try {
+			await deleteFile(fileId)
+			fetchFiles()
+		} catch (error) {
+			console.error('Error deleting file:', error)
+			setError('Failed to delete file. Please try again.')
 		}
 	}
 
@@ -132,6 +148,12 @@ const MainPage: React.FC = () => {
 												onClick={() => handleDownloadFile(fileId, fileName, fileType)}
 												disabled={isGoogleAppsFile}>
 												Download
+											</button>
+											<button
+												type="button"
+												className="btn btn-sm bg-danger ms-2"
+												onClick={() => handleDeleteFile(fileId, fileName)}>
+												Delete
 											</button>
 											{isGoogleAppsFile && <span className="ms-2 text-muted">Export required</span>}
 										</li>

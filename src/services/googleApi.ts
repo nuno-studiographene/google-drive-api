@@ -140,7 +140,7 @@ export const uploadFile = async (file: File): Promise<gapi.client.drive.File> =>
 			base64Data +
 			close_delim
 
-		const response = await gapi.client.request<gapi.client.drive.File>({
+		const response = await gapi.client.request({
 			path: '/upload/drive/v3/files',
 			method: 'POST',
 			params: { uploadType: 'multipart' },
@@ -173,7 +173,7 @@ export const downloadFile = async (fileId: string, fileName: string, mimeType: s
 			throw new Error('Google Docs files must be exported before download.')
 		}
 
-		const response = await gapi.client.request<unknown>({
+		const response = await gapi.client.request({
 			path: `/drive/v3/files/${fileId}`,
 			method: 'GET',
 			params: { alt: 'media' },
@@ -193,5 +193,22 @@ export const downloadFile = async (fileId: string, fileName: string, mimeType: s
 	} catch (error) {
 		console.error('Error downloading file:', error)
 		throw new Error('Failed to download file from Google Drive.')
+	}
+}
+
+/**
+ * Deletes a file from Google Drive by file ID.
+ * @async
+ * @function deleteFile
+ * @param {string} fileId - The ID of the file to delete
+ * @returns {Promise<void>}
+ * @throws {Error} When file deletion fails
+ */
+export const deleteFile = async (fileId: string): Promise<void> => {
+	try {
+		await gapi.client.drive.files.delete({ fileId })
+	} catch (error) {
+		console.error('Error deleting file:', error)
+		throw new Error('Failed to delete file from Google Drive.')
 	}
 }
