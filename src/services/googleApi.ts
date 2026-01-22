@@ -6,6 +6,7 @@
 
 export const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY
 const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+const SHARED_FOLDER_ID = import.meta.env.VITE_SHARED_FOLDER_ID
 
 /**
  * Initializes the Google API client
@@ -32,9 +33,13 @@ export const initGapiClient = async () => {
  */
 export const listFiles = async (): Promise<gapi.client.drive.File[]> => {
 	try {
+		const query = SHARED_FOLDER_ID
+			? `'${SHARED_FOLDER_ID}' in parents and trashed = false`
+			: "trashed = false and (sharedWithMe or 'me' in owners)"
 		const response = await gapi.client.drive.files.list({
 			pageSize: 10,
 			fields: 'nextPageToken, files(id, name, mimeType)',
+			q: query,
 		})
 		return response.result.files || []
 	} catch (error) {
@@ -62,6 +67,7 @@ export const createFile = async (name: string, content: string) => {
 		const metadata = {
 			name: name,
 			mimeType: contentType,
+			...(SHARED_FOLDER_ID ? { parents: [SHARED_FOLDER_ID] } : {}),
 		}
 
 		const multipartRequestBody =
@@ -81,7 +87,11 @@ export const createFile = async (name: string, content: string) => {
 			body: multipartRequestBody,
 		})
 
-		return response.result
+		const createdFile = response.result as gapi.client.drive.File
+		if (createdFile.id) {
+			await setFilePublic(createdFile.id)
+		}
+		return createdFile
 	} catch (error) {
 		console.error('Error creating file:', error)
 		throw new Error('Failed to create file in Google Drive.')
@@ -131,6 +141,7 @@ export const uploadFile = async (file: File): Promise<gapi.client.drive.File> =>
 		const metadata = {
 			name: file.name,
 			mimeType: contentType,
+			...(SHARED_FOLDER_ID ? { parents: [SHARED_FOLDER_ID] } : {}),
 		}
 
 		const multipartRequestBody =
@@ -150,7 +161,11 @@ export const uploadFile = async (file: File): Promise<gapi.client.drive.File> =>
 			body: multipartRequestBody,
 		})
 
-		return response.result
+		const uploadedFile = response.result as gapi.client.drive.File
+		if (uploadedFile.id) {
+			await setFilePublic(uploadedFile.id)
+		}
+		return uploadedFile
 	} catch (error) {
 		console.error('Error uploading file:', error)
 		throw new Error('Failed to upload file to Google Drive.')
@@ -210,5 +225,54 @@ export const deleteFile = async (fileId: string): Promise<void> => {
 	} catch (error) {
 		console.error('Error deleting file:', error)
 		throw new Error('Failed to delete file from Google Drive.')
+	}
+}
+
+const ALLOWED_EDIT_DOMAINS = ['studiographene.com']
+const ALLOWED_EDIT_EMAILS = (import.meta.env.VITE_ALLOWED_EDIT_EMAILS ?? '')
+	.split(',')
+	.map((email: string) => email.trim())
+	.filter(Boolean)
+
+/**
+ * Makes a file editable for specific domains and users.
+ * @async
+ * @function setFilePublic
+ * @param {string} fileId - The ID of the file to share
+ * @returns {Promise<void>}
+ */
+const setFilePublic = async (fileId: string): Promise<void> => {
+	try {
+		const permissionRequests = [
+			...ALLOWED_EDIT_DOMAINS.map(domain =>
+				gapi.client.drive.permissions.create({
+					fileId,
+					resource: {
+						type: 'domain',
+						role: 'writer',
+						domain,
+					},
+				})
+			),
+			...ALLOWED_EDIT_EMAILS.map((emailAddress: string) =>
+				gapi.client.drive.permissions.create({
+					fileId,
+					resource: {
+						type: 'user',
+						role: 'writer',
+						emailAddress,
+					},
+				})
+			),
+		]
+
+		if (permissionRequests.length === 0) {
+			throw new Error('No sharing targets configured.')
+		}
+
+		await Promise.all(permissionRequests)
+	} catch (error) {
+		console.error('Error setting file permissions:', error)
+		throw new Error('Failed to share file with other users.')
 	}
 }

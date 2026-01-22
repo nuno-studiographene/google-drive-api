@@ -6,7 +6,7 @@
  */
 
 export const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-export const SCOPES = 'https://www.googleapis.com/auth/drive.file'
+export const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly'
 
 let tokenClient: google.accounts.oauth2.TokenClient
 let accessToken: string | null = null
