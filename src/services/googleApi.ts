@@ -255,12 +255,42 @@ const getDownloadDetails = (mimeType: string, fileName: string): DownloadDetails
  * @throws {Error} When file deletion fails
  */
 export const deleteFile = async (fileId: string): Promise<void> => {
+	// Deletes a file or removes it from the shared folder if ownership blocks deletion.
 	try {
-		await gapi.client.drive.files.delete({ fileId })
+		await gapi.client.drive.files.delete({ fileId, supportsAllDrives: true })
 	} catch (error) {
+		if (SHARED_FOLDER_ID && isInsufficientPermissionsError(error)) {
+			const sharedFolderId = SHARED_FOLDER_ID
+			try {
+				const emptyResource: gapi.client.drive.File = {}
+				await gapi.client.drive.files.update({
+					fileId,
+					removeParents: sharedFolderId,
+					supportsAllDrives: true,
+					resource: emptyResource,
+				})
+				return
+			} catch (removeError) {
+				console.error('Error removing file from shared folder:', removeError)
+			}
+		}
 		console.error('Error deleting file:', error)
 		throw new Error('Failed to delete file from Google Drive.')
 	}
+}
+
+const isInsufficientPermissionsError = (error: unknown): boolean => {
+	// Checks for Drive permission errors that block deletion.
+	if (!error || typeof error !== 'object') {
+		return false
+	}
+	const errorRecord = error as Record<string, unknown>
+	const status = errorRecord['status']
+	const message = errorRecord['message']
+	if (typeof status === 'number' && status === 403) {
+		return true
+	}
+	return typeof message === 'string' && message.toLowerCase().includes('insufficient')
 }
 
 const ALLOWED_EDIT_DOMAINS = ['studiographene.com']
