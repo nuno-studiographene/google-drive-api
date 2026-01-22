@@ -184,23 +184,22 @@ export const uploadFile = async (file: File): Promise<gapi.client.drive.File> =>
  */
 export const downloadFile = async (fileId: string, fileName: string, mimeType: string): Promise<void> => {
 	try {
-		if (mimeType.startsWith('application/vnd.google-apps')) {
-			throw new Error('Google Docs files must be exported before download.')
-		}
+		const isGoogleAppsFile = mimeType.startsWith('application/vnd.google-apps')
+		const { downloadMimeType, downloadName } = getDownloadDetails(mimeType, fileName)
 
 		const response = await gapi.client.request({
-			path: `/drive/v3/files/${fileId}`,
+			path: isGoogleAppsFile ? `/drive/v3/files/${fileId}/export` : `/drive/v3/files/${fileId}`,
 			method: 'GET',
-			params: { alt: 'media' },
+			params: isGoogleAppsFile ? { mimeType: downloadMimeType } : { alt: 'media' },
 		})
 
 		const fileBlob = new Blob([response.body ?? ''], {
-			type: mimeType || 'application/octet-stream',
+			type: downloadMimeType || 'application/octet-stream',
 		})
 		const downloadUrl = URL.createObjectURL(fileBlob)
 		const link = document.createElement('a')
 		link.href = downloadUrl
-		link.download = fileName || 'download'
+		link.download = downloadName || 'download'
 		document.body.appendChild(link)
 		link.click()
 		link.remove()
@@ -209,6 +208,42 @@ export const downloadFile = async (fileId: string, fileName: string, mimeType: s
 		console.error('Error downloading file:', error)
 		throw new Error('Failed to download file from Google Drive.')
 	}
+}
+
+interface DownloadDetails {
+	downloadMimeType: string
+	downloadName: string
+}
+
+const getDownloadDetails = (mimeType: string, fileName: string): DownloadDetails => {
+	// Determines how to download/export Google Docs types.
+	if (!mimeType.startsWith('application/vnd.google-apps')) {
+		return { downloadMimeType: mimeType || 'application/octet-stream', downloadName: fileName }
+	}
+
+	const exportMap: Record<string, { mimeType: string; extension: string }> = {
+		'application/vnd.google-apps.document': {
+			mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+			extension: '.docx',
+		},
+		'application/vnd.google-apps.spreadsheet': {
+			mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+			extension: '.xlsx',
+		},
+		'application/vnd.google-apps.presentation': {
+			mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+			extension: '.pptx',
+		},
+	}
+
+	const exportInfo = exportMap[mimeType]
+	if (!exportInfo) {
+		throw new Error('Unsupported Google Docs export type.')
+	}
+
+	const normalizedName = fileName || 'download'
+	const downloadName = normalizedName.endsWith(exportInfo.extension) ? normalizedName : `${normalizedName}${exportInfo.extension}`
+	return { downloadMimeType: exportInfo.mimeType, downloadName }
 }
 
 /**

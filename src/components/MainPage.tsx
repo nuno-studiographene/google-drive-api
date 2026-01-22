@@ -62,6 +62,18 @@ const MainPage: React.FC = () => {
 		}
 	}
 
+	const handleEditInDrive = (fileId: string, fileType: string) => {
+		// Opens the file in the appropriate Google Drive editor.
+		const editorUrlMap: Record<string, string> = {
+			'application/vnd.google-apps.document': `https://docs.google.com/document/d/${fileId}/edit`,
+			'application/vnd.google-apps.spreadsheet': `https://docs.google.com/spreadsheets/d/${fileId}/edit`,
+			'application/vnd.google-apps.presentation': `https://docs.google.com/presentation/d/${fileId}/edit`,
+		}
+		const fallbackUrl = `https://drive.google.com/file/d/${fileId}/view`
+		const editorUrl = editorUrlMap[fileType] ?? fallbackUrl
+		window.open(editorUrl, '_blank', 'noopener,noreferrer')
+	}
+
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		// Updates the selected files from the file input.
 		const nextFiles = event.target.files ? Array.from(event.target.files) : []
@@ -134,7 +146,6 @@ const MainPage: React.FC = () => {
 									const fileId = file.id!
 									const fileName = file.name || 'Unnamed File'
 									const fileType = file.mimeType || 'Unknown Type'
-									const isGoogleAppsFile = fileType.startsWith('application/vnd.google-apps')
 
 									return (
 										<li key={fileId} className="mb-2">
@@ -144,8 +155,7 @@ const MainPage: React.FC = () => {
 											<button
 												type="button"
 												className="btn btn-sm bg-primary ms-2"
-												onClick={() => handleDownloadFile(fileId, fileName, fileType)}
-												disabled={isGoogleAppsFile}>
+												onClick={() => handleDownloadFile(fileId, fileName, fileType)}>
 												Download
 											</button>
 											<button
@@ -154,7 +164,12 @@ const MainPage: React.FC = () => {
 												onClick={() => handleDeleteFile(fileId, fileName)}>
 												Delete
 											</button>
-											{isGoogleAppsFile && <span className="ms-2 text-muted">Export required</span>}
+											<button
+												type="button"
+												className="btn btn-sm bg-secondary ms-2"
+												onClick={() => handleEditInDrive(fileId, fileType)}>
+												Edit in Drive
+											</button>
 										</li>
 									)
 								})}
